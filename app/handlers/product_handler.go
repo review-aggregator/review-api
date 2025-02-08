@@ -10,6 +10,11 @@ import (
 	"github.com/review-aggregator/review-api/app/models"
 )
 
+type CreateProductBody struct {
+	Name        string `json:"name" validate:"min=3,max=20"`
+	Description string `json:"description" valiate:"min=1"`
+}
+
 func HandlerCreateProduct(c *gin.Context) {
 	contextUser, err := middleware.GetContextUser(c)
 	if err != nil {
@@ -17,14 +22,18 @@ func HandlerCreateProduct(c *gin.Context) {
 		return
 	}
 
-	var product models.Product
-	if err := c.ShouldBindJSON(&product); err != nil {
+	var body CreateProductBody
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	product.ID = uuid.New()
-	product.UserID = contextUser.ID
+	product := models.Product{
+		ID:          uuid.New(),
+		Name:        body.Name,
+		Description: body.Description,
+		UserID:      contextUser.ID,
+	}
 
 	if err := models.CreateProduct(context.Background(), &product); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create product"})
@@ -34,16 +43,17 @@ func HandlerCreateProduct(c *gin.Context) {
 }
 
 func HandlerGetProducts(c *gin.Context) {
-	// userID, _ := c.Get("user_id").(string)
 	contextUser, err := middleware.GetContextUser(c)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
+
 	products, err := models.GetProductsByUserID(context.Background(), contextUser.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch products"})
 		return
 	}
+
 	c.JSON(http.StatusOK, products)
 }
