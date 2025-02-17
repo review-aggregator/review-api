@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/review-aggregator/review-api/app/config"
@@ -11,6 +12,7 @@ import (
 func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
+	fmt.Println("config: ", cfg)
 
 	// Initialize database
 	err := db.InitDB(cfg.DatabaseURL)

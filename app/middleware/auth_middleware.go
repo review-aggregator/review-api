@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"database/sql"
-	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/golang-jwt/jwt"
@@ -56,7 +56,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		user, err := models.GetUserByID(c, userID)
+		user, err := models.GetUserByUserID(c, userID)
 		if err == sql.ErrNoRows {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
@@ -77,21 +77,23 @@ func AuthMiddleware() gin.HandlerFunc {
 }
 
 func GetContextUser(c *gin.Context) (models.User, error) {
-	var contextUser models.User
 	contextUserMap, exists := c.Get("user")
+	log.Debug("contextUserMap type:", fmt.Sprintf("%T", contextUserMap))
+	log.Debug("contextUserMap value:", contextUserMap)
 
 	if !exists {
-		error := errors.New("user does not exists in gin.Context")
-		return contextUser, error
+		return models.User{}, fmt.Errorf("user not found in gin.Context")
 	}
 
-	contextUser, ok := contextUserMap.(models.User)
-	if !ok {
-		error := errors.New("not ok while changing type of contextUserMap to contextUser")
-		log.Error("Error while changing type of contextUserMap to contextUser: ", error)
-		return contextUser, error
+	// Try to cast to *models.User first
+	if userPtr, ok := contextUserMap.(*models.User); ok {
+		return *userPtr, nil
 	}
 
-	return contextUser, nil
+	// Fallback to trying models.User
+	if user, ok := contextUserMap.(models.User); ok {
+		return user, nil
+	}
 
+	return models.User{}, fmt.Errorf("failed to cast context user to models.User (got type %T)", contextUserMap)
 }

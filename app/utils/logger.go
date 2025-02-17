@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 
 	"go.uber.org/zap"
@@ -67,6 +69,14 @@ func (l *logger) Panic(msg string, err error) {
 		return
 	}
 	l.logger.Panic(msg)
+}
+
+func PrettyStruct(data interface{}) string {
+	bytes, err := json.MarshalIndent(data, "", "    ")
+	if err != nil {
+		return fmt.Sprintf("Error marshaling struct: %v", err)
+	}
+	return string(bytes)
 }
 
 func CreateLogger() *logger {

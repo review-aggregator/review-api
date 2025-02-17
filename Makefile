@@ -1,8 +1,8 @@
-# Load environment variables from .env file
-ifneq (,$(wildcard .env))
-    include .env
-    export
-endif
+ # Load environment variables from .env file
+# ifneq (,$(wildcard .env))
+#     include .env
+#     export
+# endif
 
 # Go parameters
 APP_NAME=myapp
@@ -11,8 +11,8 @@ SRC_DIR=.
 GO_FILES=$(SRC_DIR)/*.go
 
 # Database migration settings
-MIGRATIONS_DIR=migrations
-MIGRATE=migrate -path $(MIGRATIONS_DIR) -database "$(DB_URL)"
+MIGRATIONS_DIR=./app/migrations
+MIGRATE=migrate -path $(MIGRATIONS_DIR) -database "postgres://root:password@localhost:5432/reviews?sslmode=disable"
 
 .PHONY: build run test clean db-up db-down db-down-all db-force db-create db-drop db-version help
 

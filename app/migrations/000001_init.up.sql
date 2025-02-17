@@ -1,5 +1,6 @@
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clerk_id VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
@@ -37,6 +38,5 @@ CREATE TABLE reviews (
     rating_value DECIMAL(2,1) CHECK (rating_value BETWEEN 0 AND 5),
     language VARCHAR(10), -- Example: 'en', 'fr'
     created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    FOREIGN KEY (url_id) REFERENCES urls(id)
+    updated_at TIMESTAMP DEFAULT NOW()
 );

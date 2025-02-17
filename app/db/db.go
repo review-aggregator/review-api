@@ -1,10 +1,11 @@
 package db
 
 import (
+	"fmt"
 	"log"
 
-	_ "github.com/go-sql-driver/mysql" // MySQL driver
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 var (
@@ -16,6 +17,7 @@ type Database struct {
 }
 
 func InitDB(dbURL string) error {
+	fmt.Println("dburl: ", dbURL)
 	db, err := sqlx.Connect("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)

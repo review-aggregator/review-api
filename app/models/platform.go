@@ -3,10 +3,8 @@ package models
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
-	"github.com/fatih/structs"
 	"github.com/google/uuid"
 )
 
@@ -16,37 +14,27 @@ const (
 	VALUES(:id, :name, :url, :product_id, NOW(), NOW())`
 
 	queryGetPlatformByID = `
-	SELECT
-		p.id,
-		p.name,
-		p.url,
-		p.product_id,
-		p.created_at,
-		p.updated_at
-	FROM
-		platforms p
-	WHERE
-		p.id = :id`
+	SELECT p.id, p.name, p.url, p.product_id, p.created_at, p.updated_at
+	FROM platforms p
+	WHERE p.id = :id`
 
 	queryGetPlatformsByProductIDAndUserID = `
-	SELECT
-		p.id,
-		p.name,
-		p.url,
-		p.product_id,
-		p.created_at,
-		p.updated_at
-	FROM
-		platforms p
-	JOIN product ON product.id = p.product_id
-	JOIN users u ON product.user_id = u.id
-	WHERE
-		p.product_id = :product_id AND u.user_id = :user_id`
+	SELECT p.id, p.name, p.url, p.product_id, p.created_at, p.updated_at
+	FROM platforms p
+	JOIN products ON products.id = p.product_id
+	JOIN users u ON products.user_id = u.id
+	WHERE p.product_id = :product_id AND u.id = :user_id`
 
 	queryUpdatePlatformByID = `
-		UPDATE platforms SET %s
-		WHERE id = :id
-		RETURNING *`
+	UPDATE platforms SET 
+		url = :url,
+		updated_at = NOW()
+	WHERE id = :platform_id`
+
+	queryGetPlatformByNameAndProductID = `
+	SELECT p.id, p.name, p.url, p.product_id, p.created_at, p.updated_at
+	FROM platforms p
+	WHERE p.name = :name AND p.product_id = :product_id`
 )
 
 type Platform struct {
@@ -89,7 +77,7 @@ func GetPlatformByID(ctx context.Context, platformID uuid.UUID) (*Platform, erro
 func GetPlatformsByProductIDAndUserID(ctx context.Context, product_id, userID uuid.UUID) ([]*Platform, error) {
 	var platform []*Platform
 
-	err := db.NamedGetContext(ctx, &platform, queryGetPlatformsByProductIDAndUserID, map[string]interface{}{
+	err := db.NamedSelectContext(ctx, &platform, queryGetPlatformsByProductIDAndUserID, map[string]interface{}{
 		"product_id": product_id,
 		"user_id":    userID,
 	})
@@ -105,15 +93,33 @@ func GetPlatformsByProductIDAndUserID(ctx context.Context, product_id, userID uu
 	return platform, nil
 }
 
-func UpdatePlatform(ctx context.Context, platform *Platform) error {
-	platformMap := structs.Map(platform)
-	query := fmt.Sprintf(queryUpdatePlatformByID, db.GetFormattedColumnNames(db.GetStringMapKeys(platformMap), "id"))
-
-	err := db.NamedExecContextReturnObj(ctx, query, platformMap, platform)
+func UpdatePlatform(ctx context.Context, platformID uuid.UUID, url string) error {
+	_, err := db.NamedExecContext(ctx, queryUpdatePlatformByID, map[string]interface{}{
+		"platform_id": platformID,
+		"url":         url,
+	})
 	if err != nil {
 		log.Error("Error while updating platform", err)
 		return err
 	}
 
 	return nil
+}
+
+func GetPlatformByNameAndProductID(ctx context.Context, name string, productID uuid.UUID) (*Platform, error) {
+	var platform Platform
+
+	err := db.NamedGetContext(ctx, &platform, queryGetPlatformByNameAndProductID, map[string]interface{}{
+		"name":       name,
+		"product_id": productID,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, sql.ErrNoRows
+		}
+		log.Error("Error while fetching platform by name and product id", err)
+		return nil, err
+	}
+
+	return &platform, nil
 }

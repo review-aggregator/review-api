@@ -11,13 +11,14 @@ import (
 
 const (
 	queryInsertReview = `
-	INSERT INTO reviews(id, url_id, author_name, date_published, headline, review_body, rating_value, language, created_at, updated_at)
-	VALUES(:id, :url_id, :author_name, :date_published, :headline, :review_body, :rating_value, :language, NOW(), NOW())`
+	INSERT INTO reviews(id, product_id, url, author_name, date_published, headline, review_body, rating_value, language, created_at, updated_at)
+	VALUES(:id, :product_id, :url, :author_name, :date_published, :headline, :review_body, :rating_value, :language, NOW(), NOW())`
 
 	queryGetReviewByID = `
 	SELECT
 		r.id,
-		r.url_id,
+		r.product_id,
+		r.url,
 		r.author_name,
 		r.date_published,
 		r.headline,
@@ -34,7 +35,8 @@ const (
 	queryGetReviewsByProductID = `
 	SELECT
 		r.id,
-		r.url_id,
+		r.product_id, 
+		r.url,
 		r.author_name,
 		r.date_published,
 		r.headline,
@@ -52,6 +54,7 @@ const (
 type Review struct {
 	ID            uuid.UUID `db:"id" json:"id"`
 	ProductID     uuid.UUID `db:"product_id" json:"product_id"`
+	Url           string    `db:"url" json:"url"`
 	AuthorName    string    `db:"author_name" json:"author_name"`
 	DatePublished time.Time `db:"date_published" json:"date_published"`
 	Headline      string    `db:"headline" json:"headline"`
