@@ -3,7 +3,6 @@ CREATE TABLE users (
     clerk_id VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -18,7 +17,7 @@ CREATE TABLE products (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE TABLE Platforms (
+CREATE TABLE platforms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL,
     url TEXT UNIQUE NOT NULL,
@@ -30,7 +29,8 @@ CREATE TABLE Platforms (
 
 CREATE TABLE reviews (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    url_id UUID NOT NULL,
+    platform_id UUID NOT NULL,
+    url TEXT UNIQUE NOT NULL,
     author_name VARCHAR(255),
     date_published TIMESTAMP,
     headline TEXT,
@@ -38,5 +38,19 @@ CREATE TABLE reviews (
     rating_value DECIMAL(2,1) CHECK (rating_value BETWEEN 0 AND 5),
     language VARCHAR(10), -- Example: 'en', 'fr'
     created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    updated_at TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (platform_id) REFERENCES platforms(id)
+);
+
+CREATE TABLE product_stats (
+    product_id UUID NOT NULL,
+    platform VARCHAR(255) NOT NULL,
+    time_period VARCHAR(255) NOT NULL,
+    key_highlights TEXT[] NOT NULL,
+    pain_points TEXT[] NOT NULL,
+    overall_sentiment VARCHAR(1000) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (product_id, platform, time_period),
+    FOREIGN KEY (product_id) REFERENCES products(id)
 );

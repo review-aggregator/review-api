@@ -3,18 +3,21 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/review-aggregator/review-api/app/consts"
 	"github.com/review-aggregator/review-api/app/middleware"
 	"github.com/review-aggregator/review-api/app/models"
+	"github.com/review-aggregator/review-api/app/services"
 )
 
 type CreateProductBody struct {
-	Name        string `json:"name" validate:"min=3,max=20"`
+	Name        string `json:"name" validate:"min=3,max=50"`
 	Description string `json:"description" validate:"min=1"`
 	Platform    string `json:"platform" validate:"oneof=trustpilot amazon"`
 	ProductURL  string `json:"product_url" validate:"required,url"`
@@ -223,4 +226,75 @@ func HandlerUpdateProduct(c *gin.Context) {
 	}
 
 	c.Status(http.StatusOK)
+}
+
+func HandlerGenerateProductStats(c *gin.Context) {
+	// contextUser, err := middleware.GetContextUser(c)
+	// if err != nil {
+	// 	c.Status(http.StatusInternalServerError)
+	// 	return
+	// }
+
+	productID := c.Param("product_id")
+
+	err := services.GenerateProductStats(context.Background(), uuid.MustParse(productID), uuid.MustParse("027232a8-8081-4f8f-8620-f4995b580c55"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product stats", "details": err.Error()})
+		return
+	}
+
+	// stats.ProductID = uuid.MustParse(productID)
+	// stats.Platform = consts.PlatformTrustpilot
+	// stats.TimePeriod = consts.TimePeriodThisWeek
+	// models.CreateProductStats(context.Background(), stats)
+
+	c.Status(http.StatusOK)
+}
+
+// func HandlerGetProductStats(c *gin.Context) {
+// 	productID := c.Param("product_id")
+// 	stats, err := models.GetProductStats(context.Background(), uuid.MustParse(productID))
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product stats", "details": err.Error()})
+// 		return
+// 	}
+
+// 	c.JSON(http.StatusOK, stats)
+// }
+
+func HandlerInsertProductStats(c *gin.Context) {
+	var body models.ProductStats
+	if err := c.ShouldBindJSON(&body); err != nil {
+		fmt.Println("Error while binding json", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	if err := models.CreateProductStats(context.Background(), &body); err != nil {
+		fmt.Println("Error while inserting product stats", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not insert product stats"})
+		return
+	}
+
+	c.Status(http.StatusCreated)
+}
+
+func HandlerGetProductStats(c *gin.Context) {
+	productID := c.Param("product_id")
+	platform := c.Query("platform")
+	timePeriod := c.Query("time_period")
+
+	stats, err := models.GetProductStats(context.Background(), uuid.MustParse(productID), consts.PlatformType(platform), consts.TimePeriodType(timePeriod))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product stats", "details": err.Error()})
+		return
+	}
+
+	reviewRatings, err := models.GetReviewRatings(context.Background(), uuid.MustParse(productID), consts.PlatformType(platform), consts.TimePeriodType(timePeriod))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get review ratings", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"stats": stats, "review_ratings": reviewRatings})
 }

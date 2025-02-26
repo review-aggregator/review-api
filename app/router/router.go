@@ -47,15 +47,19 @@ func SetupRouter() *gin.Engine {
 
 	// Product routes group (protected)
 	productGroup := apiRouter.Group("/product")
+	productGroup.GET("/:product_id/generate-stats", handlers.HandlerGenerateProductStats)
+	productGroup.GET("/:product_id/stats", handlers.HandlerGetProductStats)
 	productGroup.Use(middleware.ClerkMiddleware())
+	productGroup.POST("", handlers.HandlerCreateProduct)
 	productGroup.GET("", handlers.HandlerGetProducts)
 	productGroup.GET("/:product_id", handlers.HandlerGetProductByID)
 	productGroup.PUT("/:product_id", handlers.HandlerUpdateProduct)
 	productGroup.DELETE("/:product_id", handlers.HandlerDeleteProduct)
-	productGroup.POST("", handlers.HandlerCreateProduct)
 
 	internalGroup := apiRouter.Group("internal")
-	internalGroup.POST("/reviews", handlers.HandlerInsertReviews)
+	internalGroup.GET("/platforms/:platform_id/scrape", handlers.HandlerRunPlatformScraper)
+	internalGroup.POST("/trustpilot/reviews", handlers.HandlerInsertTrustpilotReviews)
+	internalGroup.POST("/product-stats", handlers.HandlerInsertProductStats)
 
 	return router
 }
