@@ -12,21 +12,21 @@ import (
 
 const (
 	queryInsertUser = `
-		INSERT INTO users(id, clerk_id, name, email, password, created_at, updated_at)
-		VALUES(:id, :clerk_id, :name, :email, :password, NOW(), NOW())`
+		INSERT INTO users(id, clerk_id, name, email, created_at, updated_at)
+		VALUES(:id, :clerk_id, :name, :email, NOW(), NOW())`
 
 	queryGetUserByID = `
-		SELECT u.id, u.name, u.email, u.password, u.created_at
+		SELECT u.id, u.name, u.email, u.created_at
 		FROM users u
 		WHERE u.id = :id`
 
 	queryGetUserByClerkID = `
-		SELECT u.id, u.clerk_id, u.name, u.email, u.password, u.created_at
+		SELECT u.id, u.clerk_id, u.name, u.email, u.created_at
 		FROM users u
 		WHERE u.clerk_id = :clerk_id`
 
 	queryGetUserByEmail = `
-		SELECT u.id, u.name, u.email, u.password, u.created_at
+		SELECT u.id, u.name, u.email, u.created_at
 		FROM users u
 		WHERE email = :email`
 
@@ -41,7 +41,6 @@ type User struct {
 	ClerkID   string    `db:"clerk_id" json:"clerk_id"`
 	Name      string    `db:"name" json:"name"`
 	Email     string    `db:"email" json:"email" validate:"required,email"`
-	Password  string    `db:"password" json:"-"`
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }

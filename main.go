@@ -7,6 +7,8 @@ import (
 	"github.com/review-aggregator/review-api/app/config"
 	"github.com/review-aggregator/review-api/app/db"
 	"github.com/review-aggregator/review-api/app/router"
+	"github.com/review-aggregator/review-api/app/services"
+	"github.com/robfig/cron"
 )
 
 func main() {
@@ -19,6 +21,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	c := cron.New()
+	c.AddFunc("@daily", func() { services.CronRunScraperAndGetStats() })
 
 	// Set up the router
 	r := router.SetupRouter()

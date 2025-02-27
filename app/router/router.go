@@ -11,8 +11,6 @@ import (
 
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		fmt.Println("CORS Middleware executed for:", c.Request.Method, c.Request.URL.Path)
-
 		// Allow all origins for testing purposes
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*") // Allow all origins
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -39,8 +37,6 @@ func SetupRouter() *gin.Engine {
 
 	// User routes group
 	userGroup := apiRouter.Group("/users")
-	userGroup.POST("/signup", handlers.HandlerSignUp)
-	userGroup.POST("/login", handlers.HandlerLogin)
 	userGroup.POST("/clerk/webhook", handlers.HandlerSignUpClerkWebhook)
 	userGroup.Use(middleware.AuthMiddleware())
 	userGroup.GET("", handlers.HandlerGetUser)
@@ -55,6 +51,9 @@ func SetupRouter() *gin.Engine {
 	productGroup.GET("/:product_id", handlers.HandlerGetProductByID)
 	productGroup.PUT("/:product_id", handlers.HandlerUpdateProduct)
 	productGroup.DELETE("/:product_id", handlers.HandlerDeleteProduct)
+
+	reviewGroup := apiRouter.Group("/reviews")
+	reviewGroup.GET("", handlers.HandlerGetReviews)
 
 	internalGroup := apiRouter.Group("internal")
 	internalGroup.GET("/platforms/:platform_id/scrape", handlers.HandlerRunPlatformScraper)

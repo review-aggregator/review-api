@@ -33,6 +33,10 @@ const (
 	ORDER BY r.date_published DESC
 	LIMIT 1`
 
+	querySelectAllReviews = `
+	SELECT r.id, r.platform_id, r.url, r.author_name, r.date_published, r.headline, r.review_body, r.rating_value, r.language, r.created_at, r.updated_at
+	FROM reviews r`
+
 	queryGetReviewsByProductIDAndUserID = `
 	SELECT r.id, r.platform_id, r.url, r.author_name, r.date_published, r.headline, r.review_body, r.rating_value, r.language, r.created_at, r.updated_at
 	FROM reviews r
@@ -46,6 +50,12 @@ const (
 	INNER JOIN platforms p ON p.id = r.platform_id
 	INNER JOIN products pr ON pr.id = p.product_id
 	WHERE pr.id = :product_id AND pr.user_id = :user_id AND r.date_published BETWEEN :date_from AND :date_to`
+
+	queryGetReviewsByPlatformIDAndUserIDAndTimePeriod = `
+	SELECT r.id, r.platform_id, r.url, r.author_name, r.date_published, r.headline, r.review_body, r.rating_value, r.language, r.created_at, r.updated_at
+	FROM reviews r
+	INNER JOIN platforms p ON p.id = r.platform_id
+	WHERE p.id = :platform_id AND r.date_published BETWEEN :date_from AND :date_to`
 
 	queryGetReviewRatings = `
 	SELECT 
@@ -182,6 +192,25 @@ func GetReviewsByProductIDAndUserID(ctx context.Context, productID uuid.UUID, us
 	return reviews, nil
 }
 
+func GetReviewsByPlatformIDAndUserIDAndTimePeriod(ctx context.Context, platformID uuid.UUID, userID uuid.UUID, timePeriod consts.TimePeriodType) ([]*Review, error) {
+	var reviews []*Review
+
+	dateFrom, dateTo := getDateFromAndDateTo(timePeriod)
+
+	err := db.NamedSelectContext(ctx, &reviews, queryGetReviewsByProductIDAndUserIDAndTimePeriod, map[string]interface{}{
+		"platform_id": platformID,
+		"user_id":     userID,
+		"date_from":   dateFrom,
+		"date_to":     dateTo,
+	})
+	if err != nil {
+		log.Error("Error while fetching reviews by product id and user id", err)
+		return nil, err
+	}
+
+	return reviews, nil
+}
+
 func GetReviewsByProductIDAndUserIDAndTimePeriod(ctx context.Context, productID uuid.UUID, userID uuid.UUID, timePeriod consts.TimePeriodType) ([]*Review, error) {
 	var reviews []*Review
 
@@ -254,4 +283,18 @@ func getDateFromAndDateTo(timePeriod consts.TimePeriodType) (string, string) {
 	}
 
 	return dateFrom.Format("2006-01-02"), dateTo.Format("2006-01-02")
+}
+
+func GetReviews(ctx context.Context) ([]*Review, error) {
+	var reviews []*Review
+
+	// dateFrom, dateTo := getDateFromAndDateTo(timePeriod)
+
+	err := db.NamedSelectContext(ctx, &reviews, querySelectAllReviews, map[string]interface{}{})
+	if err != nil {
+		log.Error("Error while fetching reviews by product id and user id", err)
+		return nil, err
+	}
+
+	return reviews, nil
 }

@@ -15,6 +15,7 @@ import (
 // ClerkMiddleware validates the Clerk auth token
 func ClerkMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		fmt.Println("Clerk middleware")
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})
@@ -32,6 +33,8 @@ func ClerkMiddleware() gin.HandlerFunc {
 
 		tokenString := tokenParts[1]
 
+		fmt.Println("tokenstring", tokenString)
+
 		// Verify the token
 		claims, err := verifyClerkToken(tokenString)
 		if err != nil {
@@ -39,6 +42,8 @@ func ClerkMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		fmt.Println("Clerk claims:", claims)
 
 		clerkUserID, ok := claims["sub"].(string)
 		if !ok {
@@ -55,6 +60,8 @@ func ClerkMiddleware() gin.HandlerFunc {
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
+
+		fmt.Println("Clerk user:", user)
 
 		// Attach user info to context
 		c.Set("user", user)

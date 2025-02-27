@@ -11,7 +11,7 @@ SRC_DIR=.
 GO_FILES=$(SRC_DIR)/*.go
 
 # Database migration settings
-MIGRATIONS_DIR=./app/migrations
+MIGRATIONS_DIR=./migrations
 MIGRATE=migrate -path $(MIGRATIONS_DIR) -database "postgres://root:password@localhost:5432/reviews?sslmode=disable"
 
 .PHONY: build run test clean db-up db-down db-down-all db-force db-create db-drop db-version help

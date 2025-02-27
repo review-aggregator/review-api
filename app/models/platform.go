@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/review-aggregator/review-api/app/consts"
 )
 
 const (
@@ -17,6 +18,12 @@ const (
 	SELECT p.id, p.name, p.url, p.product_id, p.created_at, p.updated_at
 	FROM platforms p
 	WHERE p.id = :id`
+
+	queryGetPlatformsByProductID = `
+	SELECT p.id, p.name, p.url, p.product_id, p.created_at, p.updated_at
+	FROM platforms p
+	JOIN products ON products.id = p.product_id
+	WHERE p.product_id = :product_id`
 
 	queryGetPlatformsByProductIDAndUserID = `
 	SELECT p.id, p.name, p.url, p.product_id, p.created_at, p.updated_at
@@ -38,12 +45,12 @@ const (
 )
 
 type Platform struct {
-	ID        uuid.UUID `json:"id" db:"id"`
-	URL       string    `json:"url" db:"url"`
-	Name      string    `json:"name" db:"name"`
-	ProductID uuid.UUID `json:"product_id" db:"product_id"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	ID        uuid.UUID           `json:"id" db:"id"`
+	URL       string              `json:"url" db:"url"`
+	Name      consts.PlatformType `json:"name" db:"name"`
+	ProductID uuid.UUID           `json:"product_id" db:"product_id"`
+	CreatedAt time.Time           `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time           `json:"updated_at" db:"updated_at"`
 }
 
 func CreatePlatform(ctx context.Context, platform *Platform) error {
@@ -72,6 +79,25 @@ func GetPlatformByID(ctx context.Context, platformID uuid.UUID) (*Platform, erro
 	}
 
 	return &platform, nil
+}
+
+// Only to be used internally
+func GetPlatformsByProductID(ctx context.Context, product_id uuid.UUID) ([]*Platform, error) {
+	var platform []*Platform
+
+	err := db.NamedSelectContext(ctx, &platform, queryGetPlatformsByProductID, map[string]interface{}{
+		"product_id": product_id,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Info("No platforms found for product id: ", product_id)
+			return nil, sql.ErrNoRows
+		}
+		log.Error("Error while fetching platforms by product id", err)
+		return nil, err
+	}
+
+	return platform, nil
 }
 
 func GetPlatformsByProductIDAndUserID(ctx context.Context, product_id, userID uuid.UUID) ([]*Platform, error) {

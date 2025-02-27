@@ -53,3 +53,18 @@ func HandlerInsertTrustpilotReviews(c *gin.Context) {
 
 	c.Status(http.StatusCreated)
 }
+
+func HandlerGetReviews(c *gin.Context) {
+	reviews, err := models.GetReviews(context.Background())
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No reviews found for product"})
+		return
+	}
+	if err != nil {
+		fmt.Println("Error while getting reviews", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get reviews"})
+		return
+	}
+
+	c.JSON(http.StatusOK, reviews)
+}

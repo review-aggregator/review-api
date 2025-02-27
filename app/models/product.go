@@ -14,13 +14,7 @@ const (
 	VALUES(:id, :user_id, :name, :description, NOW(), NOW())`
 
 	queryGetProductByID = `
-	SELECT
-		p.id,
-		p.user_id,
-		p.name,
-		p.description,
-		p.created_at,
-		p.updated_at
+	SELECT p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at
 	FROM products p
 	WHERE p.id = :id`
 
@@ -35,11 +29,9 @@ const (
 	WHERE p.user_id = :user_id`
 
 	queryUpdateProductByID = `
-		UPDATE products
-		SET name = :name,
-			description = :description,
-			updated_at = NOW()
-		WHERE id = :product_id`
+	UPDATE products
+	SET name = :name, description = :description, updated_at = NOW()
+	WHERE id = :product_id`
 
 	queryGetProductByNameAndUserID = `
 	SELECT p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at
@@ -49,6 +41,10 @@ const (
 	queryDeleteProduct = `
 	DELETE FROM products
 	WHERE id = :id AND user_id = :user_id`
+
+	queryGetAllProducts = `
+	SELECT p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at
+	FROM products p`
 )
 
 type Product struct {
@@ -171,4 +167,16 @@ func DeleteProduct(ctx context.Context, productID, userID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func GetAllProducts(ctx context.Context) ([]*Product, error) {
+	var product []*Product
+
+	err := db.NamedSelectContext(ctx, &product, queryGetAllProducts, map[string]interface{}{})
+	if err != nil {
+		log.Error("Error while fetching all products ", err)
+		return nil, err
+	}
+
+	return product, nil
 }

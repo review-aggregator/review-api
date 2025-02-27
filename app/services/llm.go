@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/review-aggregator/review-api/app/consts"
@@ -20,7 +21,7 @@ const (
 )
 
 type PlatformNameWithID struct {
-	PlatformName string
+	PlatformName consts.PlatformType
 	PlatformID   uuid.UUID
 }
 
@@ -35,58 +36,102 @@ func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.
 		return fmt.Errorf("no platforms found")
 	}
 
+	errChan := make(chan error, 10)
+
 	// Only one platform has been added for this product so we can store the result with platform as "all" in product_stats table
 	platformTypes := []PlatformNameWithID{}
 	if len(platforms) == 1 {
+		var wg sync.WaitGroup
 		for _, timePeriod := range consts.TimePeriods {
-			reviews, err := models.GetReviewsByProductIDAndUserIDAndTimePeriod(ctx, productID, userID, timePeriod)
-			if err != nil {
-				return fmt.Errorf("error getting reviews: %w", err)
-			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				reviews, err := models.GetReviewsByProductIDAndUserIDAndTimePeriod(ctx, productID, userID, timePeriod)
+				if err != nil {
+					errChan <- fmt.Errorf("error getting reviews: %w", err)
+					return
+				}
+				PrettyPrint(reviews)
 
-			productStats, err := GetProductStats(ctx, reviews)
-			if err != nil {
-				return fmt.Errorf("error getting product stats: %w", err)
-			}
+				productStats, err := GetProductStats(ctx, reviews)
+				if err != nil {
+					errChan <- fmt.Errorf("error getting product stats: %w", err)
+					return
+				}
 
-			productStats.ProductID = productID
-			productStats.Platform = consts.PlatformAll
-			productStats.TimePeriod = timePeriod
+				productStats.ProductID = productID
+				productStats.Platform = consts.PlatformAll
+				productStats.TimePeriod = timePeriod
 
-			PrettyPrint(productStats)
+				PrettyPrint(productStats)
 
-			err = models.CreateProductStats(ctx, productStats)
-			if err != nil {
-				return fmt.Errorf("error creating product stats: %w", err)
-			}
+				err = models.CreateProductStats(ctx, productStats)
+				if err != nil {
+					errChan <- fmt.Errorf("error creating product stats: %w", err)
+					return
+				}
+			}()
 		}
+		wg.Wait()
+
+		if len(errChan) > 0 {
+			return err
+		}
+
+		return nil
 	} else {
+		var wg sync.WaitGroup
+
 		platformTypes = append(platformTypes, PlatformNameWithID{
 			PlatformName: "all",
 			PlatformID:   uuid.Nil,
 		})
 		for _, platform := range platforms {
 			platformTypes = append(platformTypes, PlatformNameWithID{
-				PlatformName: string(platform.Name),
+				PlatformName: platform.Name,
 				PlatformID:   platform.ID,
 			})
 		}
+
+		for _, platform := range platformTypes {
+			for _, timePeriod := range consts.TimePeriods {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					reviews, err := models.GetReviewsByPlatformIDAndUserIDAndTimePeriod(ctx, platform.PlatformID, userID, timePeriod)
+					if err != nil {
+						errChan <- fmt.Errorf("error getting reviews: %w", err)
+						return
+					}
+					PrettyPrint(reviews)
+
+					productStats, err := GetProductStats(ctx, reviews)
+					if err != nil {
+						errChan <- fmt.Errorf("error getting product stats: %w", err)
+						return
+					}
+
+					productStats.ProductID = productID
+					productStats.Platform = platform.PlatformName
+					productStats.TimePeriod = timePeriod
+
+					PrettyPrint(productStats)
+
+					err = models.CreateProductStats(ctx, productStats)
+					if err != nil {
+						errChan <- fmt.Errorf("error creating product stats: %w", err)
+						return
+					}
+				}()
+			}
+		}
+
+		wg.Wait()
+
+		if len(errChan) > 0 {
+			return err
+		}
 	}
-
-	// for _, platformType := range platformTypes {
-	// 	for _, timePeriod := range consts.TimePeriods {
-	// 		reviews, err := models.GetReviewsByProductIDAndUserIDAndTimePeriod(ctx, productID, userID, timePeriod)
-	// 		if err != nil {
-	// 			return nil, fmt.Errorf("error getting reviews: %w", err)
-	// 		}
-
-	// 		productStats, err := GetProductStats(ctx, reviews)
-	// 		if err != nil {
-	// 			return nil, fmt.Errorf("error getting product stats: %w", err)
-	// 		}
-
-	// 	}
-	// }
 
 	return nil
 }
@@ -105,6 +150,9 @@ func GetProductStats(ctx context.Context, reviews []*models.Review) (*models.Pro
 				"pain_points": ["issue1", "issue2", ...],
 				"overall_sentiment": "brief summary of customer satisfaction"
 			}
+
+			"key_highlights" and "pain_points" should give an array output. 
+			"overall_sentiment" should be a string which is a brief summary of all reviews"
 	
 			DO NOT ADD OR USE ANY CURLY BRACKETS i.e. { or } IN THE <think> TAGS.
 			Do not include any additional text before or after the JSON object.

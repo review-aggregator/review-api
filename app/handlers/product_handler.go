@@ -85,7 +85,7 @@ func HandlerCreateProduct(c *gin.Context) {
 
 	platform := models.Platform{
 		ID:        uuid.New(),
-		Name:      body.Platform,
+		Name:      consts.PlatformType(body.Platform),
 		URL:       body.ProductURL,
 		ProductID: product.ID,
 	}
@@ -94,6 +94,14 @@ func HandlerCreateProduct(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create platform"})
 		return
 	}
+
+	go func() {
+		err := services.GenerateProductStats(context.Background(), product.ID, contextUser.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product stats", "details": err.Error()})
+			return
+		}
+	}()
 
 	c.JSON(http.StatusCreated, product)
 }
@@ -206,7 +214,7 @@ func HandlerUpdateProduct(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			existingPlatform = &models.Platform{
 				ID:        uuid.New(),
-				Name:      platform.Name,
+				Name:      consts.PlatformType(platform.Name),
 				URL:       platform.URL,
 				ProductID: product.ID,
 			}
@@ -237,7 +245,7 @@ func HandlerGenerateProductStats(c *gin.Context) {
 
 	productID := c.Param("product_id")
 
-	err := services.GenerateProductStats(context.Background(), uuid.MustParse(productID), uuid.MustParse("027232a8-8081-4f8f-8620-f4995b580c55"))
+	err := services.GenerateProductStats(context.Background(), uuid.MustParse(productID), uuid.MustParse("4c4dd809-259b-4836-abdd-db2823dc18c5"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product stats", "details": err.Error()})
 		return
@@ -285,6 +293,10 @@ func HandlerGetProductStats(c *gin.Context) {
 	timePeriod := c.Query("time_period")
 
 	stats, err := models.GetProductStats(context.Background(), uuid.MustParse(productID), consts.PlatformType(platform), consts.TimePeriodType(timePeriod))
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No stats found for product"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product stats", "details": err.Error()})
 		return
