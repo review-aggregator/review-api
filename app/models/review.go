@@ -197,7 +197,7 @@ func GetReviewsByPlatformIDAndUserIDAndTimePeriod(ctx context.Context, platformI
 
 	dateFrom, dateTo := getDateFromAndDateTo(timePeriod)
 
-	err := db.NamedSelectContext(ctx, &reviews, queryGetReviewsByProductIDAndUserIDAndTimePeriod, map[string]interface{}{
+	err := db.NamedSelectContext(ctx, &reviews, queryGetReviewsByPlatformIDAndUserIDAndTimePeriod, map[string]interface{}{
 		"platform_id": platformID,
 		"user_id":     userID,
 		"date_from":   dateFrom,

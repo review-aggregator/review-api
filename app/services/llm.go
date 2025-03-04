@@ -12,12 +12,15 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/review-aggregator/review-api/app/consts"
 	"github.com/review-aggregator/review-api/app/models"
 )
 
 const (
-	model = "deepseek-r1"
+	model               = "deepseek-r1"
+	ReviewTypeSummary   = "summary"
+	ReviewTypeSentiment = "sentiment"
 )
 
 type PlatformNameWithID struct {
@@ -26,6 +29,7 @@ type PlatformNameWithID struct {
 }
 
 func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.UUID) error {
+	fmt.Println("started generating product stats")
 	platforms, err := models.GetPlatformsByProductIDAndUserID(ctx, productID, userID)
 	if err != nil {
 		return fmt.Errorf("error getting platforms: %w", err)
@@ -43,6 +47,7 @@ func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.
 	if len(platforms) == 1 {
 		var wg sync.WaitGroup
 		for _, timePeriod := range consts.TimePeriods {
+			fmt.Println("Started for time period: ", timePeriod)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -51,7 +56,15 @@ func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.
 					errChan <- fmt.Errorf("error getting reviews: %w", err)
 					return
 				}
-				PrettyPrint(reviews)
+				// PrettyPrint(reviews)
+
+				productSentiment, err := GetSentimentAnalysis(ctx, reviews)
+				if err != nil {
+					errChan <- fmt.Errorf("error getting product stats: %w", err)
+					return
+				}
+
+				PrettyPrint(productSentiment)
 
 				productStats, err := GetProductStats(ctx, reviews)
 				if err != nil {
@@ -59,11 +72,19 @@ func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.
 					return
 				}
 
+				var productSentimentPQArray pq.StringArray
+				err = json.Unmarshal([]byte(productSentiment), &productSentimentPQArray)
+				if err != nil {
+					errChan <- fmt.Errorf("error unmarshalling sentiment count: %w", err)
+					return
+				}
+
 				productStats.ProductID = productID
 				productStats.Platform = consts.PlatformAll
 				productStats.TimePeriod = timePeriod
+				productStats.SentimentCount = productSentimentPQArray
 
-				PrettyPrint(productStats)
+				// PrettyPrint(productStats)
 
 				err = models.CreateProductStats(ctx, productStats)
 				if err != nil {
@@ -103,7 +124,7 @@ func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.
 						errChan <- fmt.Errorf("error getting reviews: %w", err)
 						return
 					}
-					PrettyPrint(reviews)
+					// PrettyPrint(reviews)
 
 					productStats, err := GetProductStats(ctx, reviews)
 					if err != nil {
@@ -111,11 +132,27 @@ func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.
 						return
 					}
 
+					productSentiment, err := GetSentimentAnalysis(ctx, reviews)
+					if err != nil {
+						errChan <- fmt.Errorf("error getting product stats: %w", err)
+						return
+					}
+
+					PrettyPrint(productSentiment)
+
+					var productSentimentPQArray pq.StringArray
+					err = json.Unmarshal([]byte(productSentiment), &productSentimentPQArray)
+					if err != nil {
+						errChan <- fmt.Errorf("error unmarshalling sentiment count: %w", err)
+						return
+					}
+
 					productStats.ProductID = productID
 					productStats.Platform = platform.PlatformName
 					productStats.TimePeriod = timePeriod
+					productStats.SentimentCount = productSentimentPQArray
 
-					PrettyPrint(productStats)
+					// PrettyPrint(productStats)
 
 					err = models.CreateProductStats(ctx, productStats)
 					if err != nil {
@@ -162,7 +199,7 @@ func GetProductStats(ctx context.Context, reviews []*models.Review) (*models.Pro
 		},
 		{
 			"role":    "user",
-			"content": formatReviewsForPrompt(reviews),
+			"content": FormatReviewsForPrompt(reviews, ReviewTypeSummary),
 		},
 	}
 
@@ -185,7 +222,7 @@ func GetProductStats(ctx context.Context, reviews []*models.Review) (*models.Pro
 	}
 	defer resp.Body.Close()
 
-	response, err := readStreamingResponse(resp.Body)
+	response, err := readStreamingResponse(resp.Body, ReviewTypeSummary)
 	if err != nil {
 		return nil, fmt.Errorf("error reading streaming response: %w", err)
 	}
@@ -199,8 +236,94 @@ func GetProductStats(ctx context.Context, reviews []*models.Review) (*models.Pro
 	return productStats, nil
 }
 
+func GetSentimentAnalysis(ctx context.Context, reviews []*models.Review) (string, error) {
+	fmt.Println("running sentiment analysis")
+	// Create the system and user messages
+	messages := []map[string]string{
+		{
+			"role": "system",
+			"content": `You are a sentiment analyzer. Your task is to analyze and count which reviews are positive, negative or neutral on the following 
+			topics "Product Quality", "User Experience", "Price Value" and "Customer Service".
+			Ensure that your response is **only** a valid JSON object and nothing else—no explanations, no introductions, no formatting hints, and no <think> tags.
+			Here is the required JSON structure:
+	
+			[
+				{
+					"category": "product_quality",
+					"positive": 10,
+					"negative": 20,
+					"neutral": 5
+				},
+				{
+					"category": "user_experience",
+					"positive": 20,
+					"negative": 7,
+					"neutral": 9
+				},
+				{
+					"category": "price_value",
+					"positive": 33,
+					"negative": 18,
+					"neutral": 23
+				},
+				{
+					"category": "customer_service",
+					"positive": 44,
+					"negative": 12,
+					"neutral": 8
+				}	
+			]
+	
+			DO NOT ADD OR USE ANY CURLY BRACKETS i.e. { or } IN THE <think> TAGS.
+			Do not include any additional text before or after the JSON object.
+			Do not add these fields within another object, field or array.
+			Strictly follow the JSON structure and do not add any additional fields or properties.`,
+		},
+		{
+			"role":    "user",
+			"content": FormatReviewsForPrompt(reviews, ReviewTypeSentiment),
+		},
+	}
+
+	// Prepare the request body
+	requestBody := map[string]interface{}{
+		"model":    model,
+		"messages": messages,
+	}
+
+	fmt.Println(messages[1])
+
+	// PrettyPrint(requestBody)
+
+	// Convert request body to JSON
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", fmt.Errorf("error marshaling request: %w", err)
+	}
+
+	// Send request to Ollama
+	resp, err := http.Post("http://localhost:11434/api/chat", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("error calling Ollama: %w", err)
+	}
+	defer resp.Body.Close()
+
+	response, err := readStreamingResponse(resp.Body, ReviewTypeSentiment)
+	if err != nil {
+		return "", fmt.Errorf("error reading streaming response: %w", err)
+	}
+
+	// var sentiments []Sentiments
+	// err = json.Unmarshal([]byte(response), &sentiments)
+	// if err != nil {
+	// 	return []Sentiments{}, fmt.Errorf("error unmarshalling response: %w", err)
+	// }
+
+	return response, nil
+}
+
 // readStreamingResponse reads a streaming response from Ollama and returns the complete response
-func readStreamingResponse(body io.ReadCloser) (string, error) {
+func readStreamingResponse(body io.ReadCloser, reviewType string) (string, error) {
 	var fullResponse string
 	decoder := json.NewDecoder(body)
 	for {
@@ -228,9 +351,9 @@ func readStreamingResponse(body io.ReadCloser) (string, error) {
 	}
 
 	// Log the raw response for debugging
-	fmt.Println("Raw response from model:", fullResponse)
+	// fmt.Println("Raw response from model:", fullResponse)
 
-	jsonResponse, err := extractJSONFromResponse(fullResponse)
+	jsonResponse, err := extractJSONFromResponse(fullResponse, reviewType)
 	if err != nil {
 		return "", fmt.Errorf("error extracting JSON: %w", err)
 	}
@@ -247,7 +370,7 @@ func removeThinkTag(input string) string {
 	return re.ReplaceAllString(input, "")
 }
 
-func extractJSONFromResponse(response string) (string, error) {
+func extractJSONFromResponse(response, reviewType string) (string, error) {
 	// Remove unwanted tags or text
 	cleanedResponse := removeThinkTag(response)
 
@@ -256,7 +379,11 @@ func extractJSONFromResponse(response string) (string, error) {
 	end := strings.LastIndex(cleanedResponse, "}")
 	if start == -1 || end == -1 {
 		// Return an empty JSON object as a fallback
-		return `{"key_highlights": [], "pain_points": [], "overall_sentiment": ""}`, nil
+		if reviewType == "summary" {
+			return `{"key_highlights": [], "pain_points": [], "overall_sentiment": ""}`, nil
+		} else {
+			return `{"product_quality": {"positive": 0, "negative": 0, "neutral": 0}, "user_experience": {"positive": 0, "negative": 0, "neutral": 0}, "price_value": {"positive": 0, "negative": 0, "neutral": 0}, "customer_service": {"positive": 0, "negative": 0, "neutral": 0}}`, nil
+		}
 	}
 	return cleanedResponse[start : end+1], nil
 }
@@ -272,7 +399,7 @@ type ReviewData struct {
 }
 
 // formatReviewsForPrompt converts the reviews into a string format suitable for the prompt
-func formatReviewsForPrompt(reviews []*models.Review) string {
+func FormatReviewsForPrompt(reviews []*models.Review, reviewType string) string {
 	var reviewTexts []ReviewData
 	for _, review := range reviews {
 		reviewTexts = append(reviewTexts, ReviewData{
@@ -280,7 +407,15 @@ func formatReviewsForPrompt(reviews []*models.Review) string {
 			ReviewBody:  review.ReviewBody,
 		})
 	}
-	return fmt.Sprintf("%v", reviewTexts) + "Please analyze these reviews and provide key highlights, pain points and overall sentiment in JSON format as mentioned above\n\n"
+
+	prompt := ""
+	if reviewType == ReviewTypeSummary {
+		prompt = "You are a review analyzer. Your task is to analyze and summarize product reviews and provide key highlights and pain points strictly in JSON format.\n\n"
+	} else if reviewType == ReviewTypeSentiment {
+		prompt = "You are a sentiment analyzer. Your task is to analyze and count which reviews are positive, negative or neutral on the following topics 'Product Quality', 'User Experience', 'Price Value' and 'Customer Service'.\n\n"
+	}
+
+	return fmt.Sprintf("%v", reviewTexts) + prompt
 }
 
 // PrettyPrint prints any struct in a readable JSON format.

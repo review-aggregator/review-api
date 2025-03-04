@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/review-aggregator/review-api/app/consts"
 	"github.com/review-aggregator/review-api/app/models"
 )
 
@@ -67,4 +68,42 @@ func HandlerGetReviews(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, reviews)
+}
+
+type GetFormattedReviewsBody struct {
+	PlatformID uuid.UUID             `json:"platform_id"`
+	UserID     uuid.UUID             `json:"user_id"`
+	TimePeriod consts.TimePeriodType `json:"time_period"`
+}
+
+type GetFormattedReviewsResponse struct {
+	ReviewBody string `json:"review_body"`
+	Rating     int64  `json:"rating"`
+}
+
+func HandlerGetFormattedReviews(c *gin.Context) {
+	var body GetFormattedReviewsBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		fmt.Println("Error while binding json", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	reviews, err := models.GetReviewsByPlatformIDAndUserIDAndTimePeriod(context.Background(), body.PlatformID, body.UserID, body.TimePeriod)
+	if err != nil {
+		fmt.Println("Error getting reviews: ", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get reviews"})
+		return
+	}
+
+	formattedReviews := make([]GetFormattedReviewsResponse, 0)
+	for _, review := range reviews {
+		formattedReviews = append(formattedReviews, GetFormattedReviewsResponse{
+			ReviewBody: review.ReviewBody,
+			Rating:     int64(review.RatingValue),
+		})
+	}
+	// formattedReviews := services.FormatReviewsForPrompt(reviews, "sentiment")
+
+	c.JSON(http.StatusOK, gin.H{"reviews": formattedReviews})
 }

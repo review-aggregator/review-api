@@ -52,8 +52,8 @@ func SetupRouter() *gin.Engine {
 	productGroup.PUT("/:product_id", handlers.HandlerUpdateProduct)
 	productGroup.DELETE("/:product_id", handlers.HandlerDeleteProduct)
 
-	reviewGroup := apiRouter.Group("/reviews")
-	reviewGroup.GET("", handlers.HandlerGetReviews)
+	reviewGroup := apiRouter.Group("/review")
+	reviewGroup.POST("/formatted", handlers.HandlerGetFormattedReviews)
 
 	internalGroup := apiRouter.Group("internal")
 	internalGroup.GET("/platforms/:platform_id/scrape", handlers.HandlerRunPlatformScraper)

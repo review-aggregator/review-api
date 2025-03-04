@@ -11,17 +11,19 @@ import (
 
 const (
 	queryUpsertProductStats = `
-	INSERT INTO product_stats (product_id, platform, time_period, key_highlights, pain_points, overall_sentiment)
-	VALUES (:product_id, :platform, :time_period, CAST(:key_highlights AS text[]), CAST(:pain_points AS text[]), :overall_sentiment)
+	INSERT INTO product_stats (product_id, platform, time_period, key_highlights, pain_points, overall_sentiment, sentiment_count)
+	VALUES (:product_id, :platform, :time_period, CAST(:key_highlights AS text[]), CAST(:pain_points AS text[]), :overall_sentiment, :sentiment_count)
 	ON CONFLICT (product_id, platform, time_period) DO UPDATE
 	SET key_highlights = CAST(:key_highlights AS text[]),
 		pain_points = CAST(:pain_points AS text[]),
 		overall_sentiment = :overall_sentiment,
+		sentiment_count = :sentiment_count,
 		updated_at = CURRENT_TIMESTAMP
 	`
 
 	queryGetProductStats = `
-	SELECT * FROM product_stats
+	SELECT product_id, platform, time_period, key_highlights, pain_points, overall_sentiment, sentiment_count
+	FROM product_stats
 	WHERE product_id = :product_id
 	AND platform = :platform
 	AND time_period = :time_period
@@ -35,6 +37,7 @@ type ProductStats struct {
 	KeyHighlights    pq.StringArray        `json:"key_highlights" db:"key_highlights"`
 	PainPoints       pq.StringArray        `json:"pain_points" db:"pain_points"`
 	OverallSentiment string                `json:"overall_sentiment" db:"overall_sentiment"`
+	SentimentCount   pq.StringArray        `json:"sentiment_count" db:"sentiment_count"`
 	CreatedAt        time.Time             `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time             `json:"updated_at" db:"updated_at"`
 }
@@ -42,6 +45,7 @@ type ProductStats struct {
 func CreateProductStats(ctx context.Context, productStats *ProductStats) error {
 	productStats.KeyHighlights = pq.StringArray(productStats.KeyHighlights)
 	productStats.PainPoints = pq.StringArray(productStats.PainPoints)
+	productStats.SentimentCount = pq.StringArray(productStats.SentimentCount)
 	_, err := db.NamedExecContext(ctx, queryUpsertProductStats, productStats)
 	if err != nil {
 		log.Error("Error while upserting product stats", err)
