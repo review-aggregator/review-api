@@ -245,7 +245,7 @@ func HandlerGenerateProductStats(c *gin.Context) {
 
 	productID := c.Param("product_id")
 
-	err := services.GenerateProductStats(context.Background(), uuid.MustParse(productID), uuid.MustParse("4c4dd809-259b-4836-abdd-db2823dc18c5"))
+	err := services.GenerateProductStats(context.Background(), uuid.MustParse(productID), uuid.MustParse("027232a8-8081-4f8f-8620-f4995b580c55"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product stats", "details": err.Error()})
 		return

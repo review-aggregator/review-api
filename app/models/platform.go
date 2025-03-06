@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -102,6 +103,8 @@ func GetPlatformsByProductID(ctx context.Context, product_id uuid.UUID) ([]*Plat
 
 func GetPlatformsByProductIDAndUserID(ctx context.Context, product_id, userID uuid.UUID) ([]*Platform, error) {
 	var platform []*Platform
+	fmt.Println("product_id: ", product_id)
+	fmt.Println("userID: ", userID)
 
 	err := db.NamedSelectContext(ctx, &platform, queryGetPlatformsByProductIDAndUserID, map[string]interface{}{
 		"product_id": product_id,

@@ -60,7 +60,7 @@ func GetProductStatsForAllPlatformsAndTimePeriods(ctx context.Context, product *
 				}
 				PrettyPrint(reviews)
 
-				productStats, err := GetProductStats(ctx, reviews)
+				productStats, err := GetProductStats(ctx, reviews, product.Description)
 				if err != nil {
 					errChan <- fmt.Errorf("error getting product stats: %w", err)
 					return
@@ -112,7 +112,7 @@ func GetProductStatsForAllPlatformsAndTimePeriods(ctx context.Context, product *
 					}
 					PrettyPrint(reviews)
 
-					productStats, err := GetProductStats(ctx, reviews)
+					productStats, err := GetProductStats(ctx, reviews, product.Description)
 					if err != nil {
 						errChan <- fmt.Errorf("error getting product stats: %w", err)
 						return

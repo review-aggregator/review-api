@@ -19,9 +19,9 @@ const (
 )
 
 var TimePeriods = []TimePeriodType{
-	TimePeriodThisWeek,
-	TimePeriodLastWeek,
-	TimePeriodThisMonth,
-	TimePeriodLastMonth,
+	// TimePeriodThisWeek,
+	// TimePeriodLastWeek,
+	// TimePeriodThisMonth,
+	// TimePeriodLastMonth,
 	TimePeriodAllTime,
 }
