@@ -8,9 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
-	"strings"
-	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -20,7 +18,7 @@ import (
 
 const (
 	model               = "deepseek-r1"
-	groqModel           = "llama-3.3-70b-versatile"
+	groqModel           = "llama-3.1-8b-instant"
 	ReviewTypeSummary   = "summary"
 	ReviewTypeSentiment = "sentiment"
 	openAPIURL          = "http://localhost:11434/api/chat"
@@ -58,42 +56,20 @@ func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.
 		return fmt.Errorf("no platforms found")
 	}
 
-	errChan := make(chan error, 10)
-
 	// Only one platform has been added for this product so we can store the result with platform as "all" in product_stats table
 	platformTypes := []PlatformNameWithID{}
 	if len(platforms) == 1 {
-		var wg sync.WaitGroup
-		errCount := 0
+		fmt.Println("Single platform found for product ID:", productID)
 		for _, timePeriod := range consts.TimePeriods {
 			fmt.Println("Started for time period: ", timePeriod)
-			wg.Add(1)
-			go func(tp consts.TimePeriodType) {
-				defer wg.Done()
-				processTimePeriodsStats(ctx, productID, userID, product.Description, tp, errChan)
-			}(timePeriod)
+			err := processTimePeriodsStats(ctx, productID, userID, product.Description, timePeriod)
+			if err != nil {
+				return fmt.Errorf("error processing time period %s: %w", timePeriod, err)
+			}
 		}
-
-		// Start a goroutine to close errChan after all workers are done
-		go func() {
-			wg.Wait()
-			close(errChan)
-		}()
-
-		// Collect any errors from the channel
-		for err := range errChan {
-			errCount++
-			fmt.Printf("Error processing time period: %v\n", err)
-		}
-
-		if errCount > 0 {
-			return fmt.Errorf("encountered %d errors while processing time periods", errCount)
-		}
-
 		return nil
 	} else {
-		var wg sync.WaitGroup
-
+		fmt.Println("Multiple platforms found for product ID:", productID)
 		platformTypes = append(platformTypes, PlatformNameWithID{
 			PlatformName: "all",
 			PlatformID:   uuid.Nil,
@@ -107,135 +83,76 @@ func GenerateProductStats(ctx context.Context, productID uuid.UUID, userID uuid.
 
 		for _, platform := range platformTypes {
 			for _, timePeriod := range consts.TimePeriods {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					reviews, err := models.GetReviewsByPlatformIDAndUserIDAndTimePeriod(ctx, platform.PlatformID, userID, timePeriod)
-					if err != nil {
-						errChan <- fmt.Errorf("error getting reviews: %w", err)
-						return
-					}
-					// PrettyPrint(reviews)
+				fmt.Println("started for platform:", platform.PlatformName, "and time period:", timePeriod)
+				time.Sleep(60 * time.Second)
+				reviews, err := models.GetReviewsByPlatformIDAndUserIDAndTimePeriod(ctx, platform.PlatformID, userID, timePeriod)
+				if err != nil {
+					return fmt.Errorf("error getting reviews: %w", err)
+				}
 
-					productStats, err := GetProductStats(ctx, reviews, product.Description)
-					if err != nil {
-						errChan <- fmt.Errorf("error getting product stats: %w", err)
-						return
-					}
+				productStats, err := GetProductStats(ctx, reviews, product.Description)
+				if err != nil {
+					return fmt.Errorf("error getting product stats: %w", err)
+				}
 
-					productSentiment, err := GetSentimentAnalysis(ctx, reviews, "Product Quality", product.Description)
-					if err != nil {
-						errChan <- fmt.Errorf("error getting product stats: %w", err)
-						return
-					}
+				productSentiment, err := GetSentimentAnalysis(ctx, reviews, product.Description)
+				if err != nil {
+					return fmt.Errorf("error getting product stats: %w", err)
+				}
 
-					PrettyPrint(productSentiment)
+				var productSentimentPQArray pq.StringArray
+				err = json.Unmarshal([]byte(productSentiment), &productSentimentPQArray)
+				if err != nil {
+					return fmt.Errorf("error unmarshalling sentiment count: %w", err)
+				}
 
-					var productSentimentPQArray pq.StringArray
-					err = json.Unmarshal([]byte(productSentiment), &productSentimentPQArray)
-					if err != nil {
-						errChan <- fmt.Errorf("error unmarshalling sentiment count: %w", err)
-						return
-					}
+				productStats.ProductID = productID
+				productStats.Platform = platform.PlatformName
+				productStats.TimePeriod = timePeriod
+				productStats.SentimentCount = productSentimentPQArray
 
-					productStats.ProductID = productID
-					productStats.Platform = platform.PlatformName
-					productStats.TimePeriod = timePeriod
-					productStats.SentimentCount = productSentimentPQArray
-
-					// PrettyPrint(productStats)
-
-					err = models.CreateProductStats(ctx, productStats)
-					if err != nil {
-						errChan <- fmt.Errorf("error creating product stats: %w", err)
-						return
-					}
-				}()
+				err = models.CreateProductStats(ctx, productStats)
+				if err != nil {
+					return fmt.Errorf("error creating product stats: %w", err)
+				}
 			}
-		}
-
-		wg.Wait()
-
-		if len(errChan) > 0 {
-			return err
 		}
 	}
 
 	return nil
 }
 
-func processTimePeriodsStats(ctx context.Context, productID uuid.UUID, userID uuid.UUID, productDescription string, timePeriod consts.TimePeriodType, errChan chan error) {
+func processTimePeriodsStats(ctx context.Context, productID uuid.UUID, userID uuid.UUID, productDescription string, timePeriod consts.TimePeriodType) error {
 	fmt.Println("processing time periods stats for product ID:", productID, "and time period:", timePeriod)
 	reviews, err := models.GetReviewsByProductIDAndUserIDAndTimePeriod(ctx, productID, userID, timePeriod)
 	if err != nil {
-		errChan <- fmt.Errorf("error getting reviews: %w", err)
-		return
+		return fmt.Errorf("error getting reviews: %w", err)
 	}
 
+	productSentiment, err := GetSentimentAnalysis(ctx, reviews, productDescription)
+	if err != nil {
+		return fmt.Errorf("error getting sentiment analysis: %w", err)
+	}
+
+	fmt.Println("product sentiment:")
+	PrettyPrint(productSentiment)
+
+	var productSentimentPQArray pq.StringArray
+	err = json.Unmarshal([]byte(productSentiment), &productSentimentPQArray)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling sentiment count: %w", err)
+	}
+
+	fmt.Println("sleeping for 30 seconds")
+	time.Sleep(60 * time.Second)
+	fmt.Println("starting product stats")
 	productStats, err := GetProductStats(ctx, reviews, productDescription)
 	if err != nil {
-		errChan <- fmt.Errorf("error getting product stats: %w", err)
-		return
+		return fmt.Errorf("error getting product stats: %w", err)
 	}
 
 	fmt.Println("product stats:")
 	PrettyPrint(productStats)
-
-	categories := []string{"Product Quality", "User Experience", "Price Value", "Customer Service"}
-	sentimentChan := make(chan struct {
-		category string
-		result   string
-		err      error
-	}, len(categories))
-
-	var wg sync.WaitGroup
-	for _, category := range categories {
-		wg.Add(1)
-		go func(cat string) {
-			defer wg.Done()
-			productSentiment, err := GetSentimentAnalysis(ctx, reviews, cat, productDescription)
-			sentimentChan <- struct {
-				category string
-				result   string
-				err      error
-			}{
-				category: cat,
-				result:   productSentiment,
-				err:      err,
-			}
-		}(category)
-	}
-
-	// Start a goroutine to close the channel once all workers are done
-	go func() {
-		wg.Wait()
-		fmt.Println("closing sentiment channel")
-		close(sentimentChan)
-	}()
-
-	// Collect results
-	var allSentiments []string
-	sentimentMap := make(map[string]string) // To maintain order
-
-	for result := range sentimentChan {
-		if result.err != nil {
-			errChan <- fmt.Errorf("error getting sentiment analysis for %s: %w", result.category, result.err)
-			return
-		}
-		sentimentMap[result.category] = result.result
-	}
-
-	PrettyPrint(sentimentMap)
-
-	// Maintain the order of categories in the final result
-	// for _, category := range categories {
-	// 	if sentiment, ok := sentimentMap[category]; ok {
-	// 		allSentiments = append(allSentiments, sentiment)
-	// 	}
-	// }
-
-	var productSentimentPQArray pq.StringArray
-	productSentimentPQArray = allSentiments
 
 	productStats.ProductID = productID
 	productStats.Platform = consts.PlatformAll
@@ -244,17 +161,17 @@ func processTimePeriodsStats(ctx context.Context, productID uuid.UUID, userID uu
 
 	err = models.CreateProductStats(ctx, productStats)
 	if err != nil {
-		errChan <- fmt.Errorf("error creating product stats: %w", err)
-		return
+		return fmt.Errorf("error creating product stats: %w", err)
 	}
 
 	fmt.Println("product stats created for product ID:", productID, "and time period:", timePeriod)
+	return nil
 }
 
-func callLLMAPI(ctx context.Context, messages []map[string]string, provider LLMProvider) (io.ReadCloser, error) {
+func callLLMAPI(ctx context.Context, messages []map[string]string, provider LLMProvider, apiKey string) (string, error) {
 	requestBody := map[string]interface{}{
 		"messages": messages,
-		"stream":   true,
+		"stream":   false,
 	}
 
 	switch provider {
@@ -267,40 +184,46 @@ func callLLMAPI(ctx context.Context, messages []map[string]string, provider LLMP
 	case ProviderOllama:
 		requestBody["model"] = model
 	default:
-		return nil, fmt.Errorf("unsupported LLM provider: %s", provider)
+		return "", fmt.Errorf("unsupported LLM provider: %s", provider)
 	}
 
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling request: %w", err)
+		return "", fmt.Errorf("error marshaling request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", getAPIURL(provider), bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return "", fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	if provider == ProviderGroq {
-		groqAPIKey := os.Getenv("GROQ_API_KEY")
-		if groqAPIKey == "" {
-			return nil, fmt.Errorf("GROQ_API_KEY environment variable not set")
-		}
-		req.Header.Set("Authorization", "Bearer "+groqAPIKey)
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error calling API: %w", err)
+		return "", fmt.Errorf("error calling API: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("API returned non-200 status code: %d", resp.StatusCode)
+		return "", fmt.Errorf("API returned non-200 status code: %d", resp.StatusCode)
 	}
 
-	return resp.Body, nil
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response body: %w", err)
+	}
+
+	response, err := readStreamingResponse(body)
+	if err != nil {
+		return "", fmt.Errorf("error reading streaming response: %w", err)
+	}
+
+	return response, nil
 }
 
 func getAPIURL(provider LLMProvider) string {
@@ -344,21 +267,13 @@ func GetProductStats(ctx context.Context, reviews []*models.Review, productDescr
 	}
 
 	// Use Ollama by default, can be changed to ProviderGroq
-	body, err := callLLMAPI(ctx, messages, ProviderGroq)
+	body, err := callLLMAPI(ctx, messages, ProviderGroq, os.Getenv("GROQ_API_KEY_SUMMARY"))
 	if err != nil {
 		return nil, fmt.Errorf("error calling LLM API: %w", err)
 	}
-	defer body.Close()
-
-	response, err := readStreamingResponse(body, ReviewTypeSummary)
-	if err != nil {
-		return nil, fmt.Errorf("error reading streaming response: %w", err)
-	}
-
-	PrettyPrint(response)
 
 	productStats := &models.ProductStats{}
-	err = json.Unmarshal([]byte(response), productStats)
+	err = json.Unmarshal([]byte(body), productStats)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling response: %w", err)
 	}
@@ -366,8 +281,15 @@ func GetProductStats(ctx context.Context, reviews []*models.Review, productDescr
 	return productStats, nil
 }
 
-func GetSentimentAnalysis(ctx context.Context, reviews []*models.Review, category string, productDescription string) (string, error) {
-	fmt.Println("running sentiment analysis for category:", category)
+type SentimentCategory struct {
+	Category  string `json:"category"`
+	Positive  int    `json:"positive"`
+	Negative  int    `json:"negative"`
+	NoOpinion int    `json:"no_opinion"`
+}
+
+func GetSentimentAnalysis(ctx context.Context, reviews []*models.Review, productDescription string) (string, error) {
+	categories := []string{"Product Quality", "User Experience", "Price Value", "Customer Service"}
 	messages := []map[string]string{
 		{
 			"role": "system",
@@ -375,18 +297,36 @@ func GetSentimentAnalysis(ctx context.Context, reviews []*models.Review, categor
 			Ensure that your response is **only** a valid JSON object and nothing else—no explanations, no introductions, no formatting hints, and no <think> tags.
 			Here is the required JSON structure:
 	
+			[{
+				"category": "%s",
+				"positive": 0,
+				"negative": 0,
+				"no_opinion": 0
+			},
 			{
 				"category": "%s",
 				"positive": 0,
 				"negative": 0,
 				"no_opinion": 0
-			}
+			},
+			{
+				"category": "%s",
+				"positive": 0,
+				"negative": 0,
+				"no_opinion": 0
+			},
+			{
+				"category": "%s",
+				"positive": 0,
+				"negative": 0,
+				"no_opinion": 0
+			}]
 	
 			DO NOT ADD OR USE ANY CURLY BRACKETS i.e. { or } IN THE <think> TAGS.
 			Do not include any additional text before or after the JSON object.
 			Do not add these fields within another object, field or array.
 			Strictly follow the JSON structure and do not add any additional fields or properties.
-			If a review doesn't mention anything about %s, count it as "no_opinion".`, category, category, category),
+			If a review doesn't mention anything about %s, count it as "no_opinion".`, categories[0], categories[0], categories[1], categories[2], categories[3], categories[0]),
 		},
 		{
 			"role":    "user",
@@ -395,89 +335,63 @@ func GetSentimentAnalysis(ctx context.Context, reviews []*models.Review, categor
 	}
 
 	// Use Ollama by default, can be changed to ProviderGroq
-	body, err := callLLMAPI(ctx, messages, ProviderGroq)
+	body, err := callLLMAPI(ctx, messages, ProviderGroq, os.Getenv("GROQ_API_KEY_SENTIMENT"))
 	if err != nil {
 		return "", fmt.Errorf("error calling LLM API: %w", err)
 	}
-	defer body.Close()
 
-	response, err := readStreamingResponse(body, ReviewTypeSentiment)
-	if err != nil {
-		return "", fmt.Errorf("error reading streaming response: %w", err)
+	// Parse the response into our struct
+	var sentimentCategories []SentimentCategory
+	if err := json.Unmarshal([]byte(body), &sentimentCategories); err != nil {
+		return "", fmt.Errorf("error unmarshalling sentiment categories: %w", err)
 	}
 
-	return response, nil
+	// Convert to string array format for PostgreSQL
+	var sentimentStrings []string
+	for _, category := range sentimentCategories {
+		categoryJSON, err := json.Marshal(category)
+		if err != nil {
+			return "", fmt.Errorf("error marshalling category: %w", err)
+		}
+		sentimentStrings = append(sentimentStrings, string(categoryJSON))
+	}
+
+	// Convert back to JSON string array
+	resultJSON, err := json.Marshal(sentimentStrings)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling final result: %w", err)
+	}
+
+	return string(resultJSON), nil
 }
 
-// readStreamingResponse reads a streaming response from Ollama and returns the complete response
-func readStreamingResponse(body io.ReadCloser, reviewType string) (string, error) {
+// readStreamingResponse reads a non-streaming response and returns the complete response
+func readStreamingResponse(body []byte) (string, error) {
+	var result map[string]interface{}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	if err := decoder.Decode(&result); err != nil {
+		return "", fmt.Errorf("error decoding response: %w", err)
+	}
+
 	var fullResponse string
-	decoder := json.NewDecoder(body)
-	for {
-		var result map[string]interface{}
-		if err := decoder.Decode(&result); err != nil {
-			if err == io.EOF {
-				break
+	if choices, ok := result["choices"].([]interface{}); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]interface{}); ok {
+			if message, ok := choice["message"].(map[string]interface{}); ok {
+				if content, ok := message["content"].(string); ok {
+					fullResponse = content
+				}
 			}
-			return "", fmt.Errorf("error decoding response: %w", err)
-		}
-
-		if message, ok := result["message"].(map[string]interface{}); ok {
-			if content, ok := message["content"].(string); ok {
-				fullResponse += content
-			}
-		}
-
-		if done, ok := result["done"].(bool); ok && done {
-			break
 		}
 	}
 
 	if fullResponse == "" {
-		return "", fmt.Errorf("no valid response content from Ollama")
+		return "", fmt.Errorf("no valid response content from API")
 	}
 
 	// Log the raw response for debugging
 	fmt.Println("Raw response from model:", fullResponse)
 
-	jsonResponse, err := extractJSONFromResponse(fullResponse, reviewType)
-	if err != nil {
-		return "", fmt.Errorf("error extracting JSON: %w", err)
-	}
-
-	if err := validateJSON(jsonResponse); err != nil {
-		return "", fmt.Errorf("invalid JSON: %w", err)
-	}
-
-	return jsonResponse, nil
-}
-
-func removeThinkTag(input string) string {
-	re := regexp.MustCompile(`(?s)<think>.*?</think>`)
-	return re.ReplaceAllString(input, "")
-}
-
-func extractJSONFromResponse(response, reviewType string) (string, error) {
-	// Remove unwanted tags or text
-	cleanedResponse := removeThinkTag(response)
-
-	// Look for the JSON object in the cleaned response
-	start := strings.Index(cleanedResponse, "{")
-	end := strings.LastIndex(cleanedResponse, "}")
-	if start == -1 || end == -1 {
-		// Return an empty JSON object as a fallback
-		if reviewType == ReviewTypeSummary {
-			return `{"key_highlights": [], "pain_points": [], "overall_sentiment": ""}`, nil
-		} else {
-			return `{"product_quality": {"positive": 0, "negative": 0, "neutral": 0}, "user_experience": {"positive": 0, "negative": 0, "neutral": 0}, "price_value": {"positive": 0, "negative": 0, "neutral": 0}, "customer_service": {"positive": 0, "negative": 0, "neutral": 0}}`, nil
-		}
-	}
-	return cleanedResponse[start : end+1], nil
-}
-
-func validateJSON(jsonString string) error {
-	var jsonData map[string]interface{}
-	return json.Unmarshal([]byte(jsonString), &jsonData)
+	return fullResponse, nil
 }
 
 type ReviewData struct {
