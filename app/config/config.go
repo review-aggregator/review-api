@@ -8,11 +8,13 @@ import (
 )
 
 type AppConfig struct {
-	ServerAddress     string
-	DatabaseURL       string
-	JWTSecret         string
-	InternalAuthToken string
-	ClerkPublicKey    string
+	ServerAddress      string
+	DatabaseURL        string
+	JWTSecret          string
+	InternalAuthToken  string
+	ClerkPublicKey     string
+	GoogleClientID     string
+	GoogleClientSecret string
 }
 
 var Config AppConfig
@@ -25,11 +27,21 @@ func LoadConfig() *AppConfig {
 	}
 
 	config := &AppConfig{
+<<<<<<< HEAD
 		ServerAddress:     getEnv("SERVER_ADDRESS", ":8000"),
 		DatabaseURL:       getEnv("DatabaseURL", "postgresql://root:password@localhost:5432/reviews?sslmode=disable"),
 		JWTSecret:         getEnv("JWT_SECRET", "your_jwt_secret"),
 		InternalAuthToken: getEnv("INTERNAL_AUTH_TOKEN", "admin"),
 		ClerkPublicKey:    getEnv("CLERK_JWT_PUBLIC_KEY", ""),
+=======
+		ServerAddress:      getEnv("SERVER_ADDRESS", ":8000"),
+		DatabaseURL:        getEnv("DatabaseURL", "user=root password=password dbname=reviews host=localhost port=5432 sslmode=disable"),
+		JWTSecret:          getEnv("JWT_SECRET", "your_jwt_secret"),
+		InternalAuthToken:  getEnv("INTERNAL_AUTH_TOKEN", "admin"),
+		ClerkPublicKey:     getEnv("CLERK_JWT_PUBLIC_KEY", ""),
+		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+>>>>>>> 1bc1729 (wip)
 	}
 
 	// Check for critical environment variables

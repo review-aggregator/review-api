@@ -22,6 +22,8 @@ func main() {
 		panic(err)
 	}
 
+	services.InitGoogleReview(cfg.GoogleClientID, cfg.GoogleClientSecret)
+
 	c := cron.New()
 	c.AddFunc("@daily", func() { services.CronRunScraperAndGetStats() })
 

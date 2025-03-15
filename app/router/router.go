@@ -60,5 +60,9 @@ func SetupRouter() *gin.Engine {
 	internalGroup.POST("/trustpilot/reviews", handlers.HandlerInsertTrustpilotReviews)
 	internalGroup.POST("/product-stats", handlers.HandlerInsertProductStats)
 
+	googleGroup := apiRouter.Group("/google")
+	googleGroup.GET("/oauth/url", handlers.HandlerGetGoogleOAuth2URL)
+	googleGroup.GET("/oauth/callback", handlers.HandlerGoogleOAuth2Callback)
+
 	return router
 }

@@ -6,6 +6,7 @@ const (
 	PlatformAll        PlatformType = "all"
 	PlatformTrustpilot PlatformType = "trustpilot"
 	PlatformAmazon     PlatformType = "amazon"
+	PlatformGoogle     PlatformType = "google"
 )
 
 type TimePeriodType string

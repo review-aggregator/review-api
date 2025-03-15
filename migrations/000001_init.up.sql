@@ -60,3 +60,15 @@ CREATE TABLE product_stats (
 ALTER TABLE reviews 
 ADD CONSTRAINT reviews_url_unique 
 UNIQUE (url);
+
+CREATE TABLE google_review_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id VARCHAR(255) NOT NULL,
+    account_name VARCHAR(255) NOT NULL,
+    location_id VARCHAR(255) NOT NULL,
+    location_name VARCHAR(255) NOT NULL,
+    location_address TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (account_id) REFERENCES google_review_accounts(id)
+);

@@ -48,6 +48,7 @@ const (
 type Platform struct {
 	ID        uuid.UUID           `json:"id" db:"id"`
 	URL       string              `json:"url" db:"url"`
+	Locations []string            `json:"locations" db:"locations"`
 	Name      consts.PlatformType `json:"name" db:"name"`
 	ProductID uuid.UUID           `json:"product_id" db:"product_id"`
 	CreatedAt time.Time           `json:"created_at" db:"created_at"`
