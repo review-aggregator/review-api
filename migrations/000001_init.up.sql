@@ -12,6 +12,7 @@ CREATE TABLE products (
     user_id UUID NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -20,7 +21,7 @@ CREATE TABLE products (
 CREATE TABLE platforms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL,
-    url TEXT UNIQUE NOT NULL,
+    url TEXT NOT NULL,
     name VARCHAR(255), -- Example: 'Trustpilot', 'Amazon'
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
@@ -55,3 +56,7 @@ CREATE TABLE product_stats (
     PRIMARY KEY (product_id, platform, time_period),
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
+
+ALTER TABLE reviews 
+ADD CONSTRAINT reviews_url_unique 
+UNIQUE (url);

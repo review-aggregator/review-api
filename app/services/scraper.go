@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/review-aggregator/review-api/app/models"
 )
@@ -30,7 +31,7 @@ func ScrapeTrustpilot(ctx context.Context, platform *models.Platform, latestRevi
 	}
 
 	// Create new request
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://127.0.0.1:8001/scrape/trustpilot", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", os.Getenv("SCRAPER_URL")+"/scrape/trustpilot", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		fmt.Println("Error while creating request", err)
 		return fmt.Errorf("error creating request: %v", err)

@@ -91,17 +91,15 @@ func HandlerCreateProduct(c *gin.Context) {
 	}
 
 	if err := models.CreatePlatform(context.Background(), &platform); err != nil {
+		if err.Error() == "pq: duplicate key value violates unique constraint \"platforms_url_key\"" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Platform already exists"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create platform"})
 		return
 	}
 
-	go func() {
-		err := services.GenerateProductStats(context.Background(), product.ID, contextUser.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product stats", "details": err.Error()})
-			return
-		}
-	}()
+	services.ScrapeTrustpilot(context.Background(), &platform, "")
 
 	c.JSON(http.StatusCreated, product)
 }

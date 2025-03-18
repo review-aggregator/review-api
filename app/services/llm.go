@@ -251,7 +251,7 @@ func GetProductStats(ctx context.Context, reviews []*models.Review, productDescr
 				"overall_sentiment": "brief summary of customer satisfaction"
 			}
 
-			"key_highlights" and "pain_points" should give an array output. 
+			"key_highlights" and "pain_points" should give an array output. Limit the number of key highlights and pain points to 5.
 			"overall_sentiment" should be a string which is a brief summary of all reviews"
 	
 			DO NOT ADD OR USE ANY CURLY BRACKETS i.e. { or } IN THE <think> TAGS.

@@ -26,7 +26,7 @@ const (
 	queryGetProductsByUserID = `
 	SELECT p.id, p.name, p.description, p.created_at, p.updated_at
 	FROM products p
-	WHERE p.user_id = :user_id`
+	WHERE p.is_deleted = FALSE AND p.user_id = :user_id`
 
 	queryUpdateProductByID = `
 	UPDATE products
@@ -36,15 +36,32 @@ const (
 	queryGetProductByNameAndUserID = `
 	SELECT p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at
 	FROM products p
-	WHERE p.name = :name AND p.user_id = :user_id`
+	WHERE p.is_deleted = FALSE AND p.name = :name AND p.user_id = :user_id`
 
 	queryDeleteProduct = `
-	DELETE FROM products
+	UPDATE products
+	SET is_deleted = TRUE
 	WHERE id = :id AND user_id = :user_id`
 
 	queryGetAllProducts = `
 	SELECT p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at
 	FROM products p`
+
+	queryGetProductsWithReviewStats = `
+	SELECT 
+		p.id, 
+		p.user_id, 
+		p.name, 
+		p.description, 
+		p.created_at, 
+		p.updated_at,
+		COUNT(DISTINCT r.id) as review_count,
+		ROUND(COALESCE(AVG(r.rating_value), 0), 2) as average_rating
+	FROM products p
+	LEFT JOIN platforms plt ON plt.product_id = p.id
+	LEFT JOIN reviews r ON r.platform_id = plt.id
+	WHERE p.is_deleted = FALSE AND p.user_id = :user_id
+	GROUP BY p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at`
 )
 
 type Product struct {
@@ -55,6 +72,12 @@ type Product struct {
 	Platforms   []*Platform `json:"platforms" db:"platforms"`
 	CreatedAt   time.Time   `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time   `json:"updated_at" db:"updated_at"`
+}
+
+type ProductWithReviewStats struct {
+	Product
+	ReviewCount   int     `json:"review_count" db:"review_count"`
+	AverageRating float64 `json:"average_rating" db:"average_rating"`
 }
 
 func CreateProduct(ctx context.Context, product *Product) error {
@@ -105,10 +128,10 @@ func GetProductByIDAndUserID(ctx context.Context, productID, userID uuid.UUID) (
 	return &product, nil
 }
 
-func GetProductsByUserID(ctx context.Context, userID uuid.UUID) ([]*Product, error) {
-	var product []*Product
+func GetProductsByUserID(ctx context.Context, userID uuid.UUID) ([]*ProductWithReviewStats, error) {
+	var product []*ProductWithReviewStats
 
-	err := db.NamedSelectContext(ctx, &product, queryGetProductsByUserID, map[string]interface{}{
+	err := db.NamedSelectContext(ctx, &product, queryGetProductsWithReviewStats, map[string]interface{}{
 		"user_id": userID,
 	})
 	if err != nil {

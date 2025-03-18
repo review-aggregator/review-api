@@ -26,6 +26,9 @@ func HandlerCreatePlatform(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create platform"})
 		return
 	}
+
+	services.ScrapeTrustpilot(context.Background(), &platform, "")
+
 	c.JSON(http.StatusCreated, platform)
 }
 

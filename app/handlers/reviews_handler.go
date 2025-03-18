@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/review-aggregator/review-api/app/consts"
 	"github.com/review-aggregator/review-api/app/models"
+	"github.com/review-aggregator/review-api/app/services"
 )
 
 type InsertTrustpilotReviewsBody struct {
@@ -46,11 +47,24 @@ func HandlerInsertTrustpilotReviews(c *gin.Context) {
 		return
 	}
 
-	if err := models.CreateReviews(context.Background(), body.Reviews, platform.ID); err != nil {
-		fmt.Println("Error while inserting reviews", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not insert reviews"})
+	product, err := models.GetProductByID(context.Background(), platform.ProductID)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
 		return
 	}
+	if err != nil {
+		fmt.Println("Error while getting product", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get product"})
+		return
+	}
+
+	if err := models.CreateReviews(context.Background(), body.Reviews, platform.ID); err != nil {
+		fmt.Println("Error while inserting reviews", err)
+	}
+
+	go func() {
+		services.GenerateProductStats(context.Background(), product.ID, product.UserID)
+	}()
 
 	c.Status(http.StatusCreated)
 }

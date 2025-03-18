@@ -26,7 +26,7 @@ func LoadConfig() *AppConfig {
 
 	config := &AppConfig{
 		ServerAddress:     getEnv("SERVER_ADDRESS", ":8000"),
-		DatabaseURL:       getEnv("DatabaseURL", "user=root password=password dbname=reviews host=localhost port=5432 sslmode=disable"),
+		DatabaseURL:       getEnv("DatabaseURL", "postgresql://root:password@localhost:5432/reviews?sslmode=disable"),
 		JWTSecret:         getEnv("JWT_SECRET", "your_jwt_secret"),
 		InternalAuthToken: getEnv("INTERNAL_AUTH_TOKEN", "admin"),
 		ClerkPublicKey:    getEnv("CLERK_JWT_PUBLIC_KEY", ""),

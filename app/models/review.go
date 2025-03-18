@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/review-aggregator/review-api/app/consts"
+	"github.com/review-aggregator/review-api/app/utils"
 )
 
 const (
@@ -113,6 +115,9 @@ func CreateReviews(ctx context.Context, reviews []*Review, platformID uuid.UUID)
 			review.ID = uuid.New()
 		}
 	}
+
+	fmt.Println("reviews", queryInsertReview)
+	utils.PrettyStruct(reviews)
 
 	_, err := db.NamedExecContext(ctx, queryInsertReview, reviews)
 	if err != nil {

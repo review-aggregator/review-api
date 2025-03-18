@@ -63,7 +63,6 @@ func GetProductStats(ctx context.Context, productID uuid.UUID, platform consts.P
 		"time_period": timePeriod,
 	})
 	if err != nil {
-		log.Error("Error while getting product stats", err)
 		return nil, err
 	}
 
