@@ -57,18 +57,20 @@ CREATE TABLE product_stats (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
-ALTER TABLE reviews 
-ADD CONSTRAINT reviews_url_unique 
-UNIQUE (url);
-
 CREATE TABLE google_review_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    platform_id UUID NOT NULL,
     account_id VARCHAR(255) NOT NULL,
     account_name VARCHAR(255) NOT NULL,
     location_id VARCHAR(255) NOT NULL,
     location_name VARCHAR(255) NOT NULL,
     location_address TEXT NOT NULL,
+    oauth_token JSONB NOT NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
-    FOREIGN KEY (account_id) REFERENCES google_review_accounts(id)
+    FOREIGN KEY (platform_id) REFERENCES platforms(id)
 );
+
+ALTER TABLE reviews 
+ADD CONSTRAINT reviews_url_unique 
+UNIQUE (url);

@@ -74,7 +74,7 @@ func HandlerGoogleOAuth2Callback(c *gin.Context) {
 		return
 	}
 
-	userID := stateData["user_id"]
+	// userID := stateData["user_id"]
 	productID := stateData["product_id"]
 
 	oauthConfig := &oauth2.Config{
@@ -87,25 +87,42 @@ func HandlerGoogleOAuth2Callback(c *gin.Context) {
 
 	token, err := oauthConfig.Exchange(ctx, code)
 	if err != nil {
+		log.Error("Error while exchanging code", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to exchange code"})
 		return
 	}
 
 	management, err := mybusinessaccountmanagement.NewService(ctx, option.WithTokenSource(oauthConfig.TokenSource(ctx, token)))
 	if err != nil {
+		log.Error("Error while creating management service", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create management service"})
 		return
 	}
 
 	information, err := mybusinessbusinessinformation.NewService(ctx, option.WithTokenSource(oauthConfig.TokenSource(ctx, token)))
 	if err != nil {
+		log.Error("Error while creating business information service", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create business information service"})
 		return
 	}
 
 	accounts, err := management.Accounts.List().Do()
 	if err != nil {
+		log.Error("Error while listing accounts", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to list accounts"})
+		return
+	}
+
+	googleReviewAccount := &models.GoogleReviewAccount{
+		PlatformID:  uuid.MustParse(productID),
+		AccountID:   accounts.Accounts[0].Name,
+		AccountName: accounts.Accounts[0].AccountName,
+	}
+
+	err = models.CreateGoogleReviewAccount(ctx, googleReviewAccount)
+	if err != nil {
+		log.Error("Error while creating google review account", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to store google review account"})
 		return
 	}
 
@@ -119,17 +136,6 @@ func HandlerGoogleOAuth2Callback(c *gin.Context) {
 		}
 
 		log.Info("Locations fetched for account", zap.Any("Account", account.AccountName), zap.Any("AccountID", account.Name), zap.Any("Locations", locations))
-
-		googleToken := &models.GoogleReviewToken{
-			UserID: uuid.MustParse(userID),
-			Token:  token.AccessToken,
-		}
-
-		err = models.CreateGoogleToken(ctx, googleToken)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to store token"})
-			return
-		}
 
 		var locationIDS []string
 		for _, location := range locations.Locations {
