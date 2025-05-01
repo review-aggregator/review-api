@@ -85,6 +85,18 @@ func HandlerRunPlatformScraper(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not scrape platform"})
 			return
 		}
+	case "tripadvisor":
+		fmt.Println("Scraping tripadvisor")
+		reviews, err := services.ScrapeTripadvisor(context.Background(), platform, latestReviewDate, 100)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not scrape platform"})
+			return
+		}
+		err = models.CreateReviews(context.Background(), reviews, platform.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create reviews"})
+			return
+		}
 	}
 
 	c.Status(http.StatusOK)
